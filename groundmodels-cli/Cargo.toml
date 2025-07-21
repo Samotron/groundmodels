@@ -1,0 +1,25 @@
+[package]
+name = "groundmodels-cli"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Command-line interface for groundmodels"
+
+[[bin]]
+name = "groundmodels"
+path = "src/main.rs"
+
+[dependencies]
+groundmodels-core.workspace = true
+clap.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+jsonschema = "0.26"
+tokio = { version = "1.0", features = ["full"] }
+tower-lsp = "0.20"
+dialoguer = "0.11"
+console = "0.15"
+tabled = "0.16"
+docx-rs = "0.4"

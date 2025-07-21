@@ -632,7 +632,7 @@ impl Default for SoilLayer {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct GroundModel {
     pub soil_layers: Vec<SoilLayer>,
     pub soil_params: Vec<SoilParams>,

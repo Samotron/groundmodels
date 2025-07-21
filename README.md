@@ -1,186 +1,128 @@
-# GroundModels - AGSi Conversion Library
+# GroundModels
 
-A Rust library for converting AGSi (Applied Ground Science Information) files to soil parameters and ground models.
+A comprehensive Rust library and toolset for geotechnical ground modeling and soil parameter analysis, with support for AGSi (Association of Geotechnical & Geoenvironmental Specialists interpreted) data format.
 
-## Overview
+## Workspace Structure
 
-This library provides functionality equivalent to the TypeScript `addConvertCommand` function, allowing you to:
+This workspace contains three main components:
 
-1. Convert AGSi files to arrays of `SoilParams`
-2. Convert AGSi files to `GroundModel` objects
-3. Export results to JSON format
+- **`groundmodels-core/`** - Core Rust library with geotechnical modeling functionality
+- **`groundmodels-cli/`** - Command-line interface for the library
+- **`groundmodels-py/`** - Python bindings for the core library
 
-## Core Functions
+## Quick Start
 
-### `convert_agsi_file`
+### Building the Workspace
 
-The main conversion function that processes AGSi JSON files:
+```bash
+# Build all components
+cargo build
 
-```rust
-pub fn convert_agsi_file(
-    file_path: &str, 
-    convert_type: ConvertType, 
-    output_path: Option<&str>
-) -> Result<String, Box<dyn std::error::Error>>
+# Run tests
+cargo test
+
+# Build in release mode
+cargo build --release
 ```
 
-### `SoilParams::from_agsi_data_parameters`
+### Using the CLI
 
-Converts AGSi data parameter values to soil parameters:
+```bash
+# Build and install the CLI
+cargo install --path groundmodels-cli
 
-```rust
-pub fn from_agsi_data_parameters(data: &[AgsiDataParameterValueElement]) -> Self
+# Convert AGSi JSON to soil parameters
+groundmodels convert -i data.json -o output.json --convert-type soil-params
+
+# Analyze AGSi data
+groundmodels analyze -i data.json
+
+# Generate example data
+groundmodels example -o example.json
 ```
 
-### `GroundModel::from_agsi_file`
+### Using the Python Bindings
 
-Creates a ground model from AGSi JSON data:
+```bash
+# Build and install Python bindings
+cd groundmodels-py
+pip install maturin
+maturin develop
 
-```rust
-pub fn from_agsi_file(agsi_json: &serde_json::Value) -> Self
+# Use in Python
+python -c "import groundmodels_py; print('Success!')"
 ```
 
-## Supported AGSi Parameters
+## Core Library Features
 
-The conversion process maps the following AGSi parameter codes:
+- **AGSi Data Support**: Parse and process AGSi JSON format files
+- **Soil Parameter Analysis**: Extract and analyze geotechnical soil parameters
+- **Ground Model Creation**: Build comprehensive ground models from data
+- **Multiple Soil Types**: Support for granular, cohesive, and rock materials
+- **Advanced Parameters**: Handle complex geotechnical properties
+- **Hoek-Brown Criteria**: Rock mass characterization support
 
-| AGSi Code ID | SoilParams Field | Description |
-|--------------|------------------|-------------|
-| `UnitWeight` | `unit_weight` | Unit weight of soil |
-| `AngleFriction` | `phi_prime` | Angle of internal friction |
-| `UndrainedShearStrength` | `cu` | Undrained shear strength (sets behavior to Cohesive) |
-| `YoungsModulus` | `youngs_modulus` | Young's modulus |
-| `Cohesion` | `c_prime` | Effective cohesion |
-| `ModulusOfVolumeCompressibility` | `mv` | Coefficient of volume compressibility |
-| `GeologicalStrengthIndex` | `gsi` | Geological Strength Index |
-| `UnconfinedCompressiveStrength` | `ucs` | UCS (sets behavior to Rock) |
-| `HoekBrownParamMi` | `mi` | Hoek-Brown parameter mi |
-| `Disturbance` | `disturbance` | Disturbance factor |
+## CLI Features
 
-Any unrecognized parameters are stored in the `advanced_parameters` field.
+- **Data Conversion**: Convert AGSi data to different formats
+- **Analysis Tools**: Analyze soil parameters and ground models
+- **Example Generation**: Create sample AGSi data files
+- **JSON Output**: Structured output for integration with other tools
 
-## Usage Examples
+## Python Bindings Features
 
-### Basic Conversion
+- **Native Python API**: Pythonic interface to core functionality
+- **AGSi Processing**: Direct JSON string processing
+- **Data Export**: Convert results to Python dictionaries
+- **Type Safety**: Leverages Rust's type system for reliability
 
-```rust
-use groundmodels::{convert_agsi_file, ConvertType};
+## Development
 
-// Convert to SoilParams array
-let result = convert_agsi_file(
-    "input.json", 
-    ConvertType::SoilParams, 
-    Some("output.json")
-)?;
+### Prerequisites
 
-// Convert to GroundModel
-let result = convert_agsi_file(
-    "input.json", 
-    ConvertType::GroundModel, 
-    None // Print to stdout
-)?;
+- Rust 1.70+
+- Python 3.8+ (for Python bindings)
+- Maturin (for Python bindings development)
+
+### Building Individual Components
+
+```bash
+# Core library
+cd groundmodels-core
+cargo build
+
+# CLI
+cd groundmodels-cli  
+cargo build
+
+# Python bindings
+cd groundmodels-py
+maturin develop
 ```
 
-### Direct Parameter Conversion
+### Running Tests
 
-```rust
-use groundmodels::{SoilParams, AgsiDataParameterValueElement};
+```bash
+# All tests
+cargo test
 
-let data = vec![
-    AgsiDataParameterValueElement {
-        code_id: "UnitWeight".to_string(),
-        value_numeric: Some(18.0),
-    },
-    AgsiDataParameterValueElement {
-        code_id: "AngleFriction".to_string(),
-        value_numeric: Some(30.0),
-    },
-];
-
-let soil_params = SoilParams::from_agsi_data_parameters(&data);
+# Specific component
+cargo test -p groundmodels-core
+cargo test -p groundmodels-cli
 ```
 
-## Soil Behavior Classification
+## Examples
 
-The library automatically determines soil behavior based on parameters:
+See the `examples/` directory in each component for usage examples.
 
-- **Cohesive**: When `UndrainedShearStrength` is provided with a positive value
-- **Rock**: When `UnconfinedCompressiveStrength` is provided
-- **Granular**: Default behavior
+## License
 
-## Data Structures
+MIT License - see LICENSE file for details.
 
-### `AgsiDataParameterValueElement`
+## Contributing
 
-```rust
-pub struct AgsiDataParameterValueElement {
-    pub code_id: String,
-    pub value_numeric: Option<f64>,
-}
-```
-
-### `ConvertType`
-
-```rust
-pub enum ConvertType {
-    SoilParams,
-    GroundModel,
-}
-```
-
-### `AdvancedParameter`
-
-```rust
-pub struct AdvancedParameter {
-    pub name: String,
-    pub value: f64,
-}
-```
-
-## Error Handling
-
-The conversion functions return `Result` types for proper error handling:
-
-```rust
-match convert_agsi_file("input.json", ConvertType::SoilParams, None) {
-    Ok(json_output) => println!("Success: {}", json_output),
-    Err(e) => eprintln!("Error: {}", e),
-}
-```
-
-## Input Format
-
-The expected AGSi JSON structure:
-
-```json
-{
-  "agsiModel": [
-    {
-      "agsiModelElement": [
-        {
-          "elementName": "Layer Name",
-          "agsiDataParameterValue": [
-            {
-              "codeID": "UnitWeight",
-              "valueNumeric": 18.0
-            }
-          ]
-        }
-      ]
-    }
-  ]
-}
-```
-
-## Output Format
-
-### SoilParams Array
-Returns a JSON array of soil parameter objects with all the geotechnical properties.
-
-### GroundModel
-Returns a JSON object containing:
-- `soil_layers`: Array of soil layers (empty in basic conversion)
-- `soil_params`: Array of soil parameters
-- `rigid_boundary`: Optional rigid boundary depth
-- `groundwater`: Groundwater level
-- `reference`: Reference identifier
+1. Fork the repository
+2. Create your feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'Add some amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request

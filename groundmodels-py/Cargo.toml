@@ -1,0 +1,21 @@
+[package]
+name = "groundmodels-py"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Python bindings for groundmodels"
+
+[lib]
+name = "groundmodels_py"
+crate-type = ["cdylib"]
+
+[dependencies]
+groundmodels-core.workspace = true
+pyo3.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+
+[build-dependencies]
+pyo3-build-config = "0.22"

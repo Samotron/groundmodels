@@ -1,4 +1,4 @@
-use groundmodels::{convert_agsi_file, ConvertType};
+use groundmodels_core::{convert_agsi_file, ConvertType};
 use std::fs;
 
 fn main() {
