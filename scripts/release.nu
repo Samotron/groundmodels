@@ -71,11 +71,34 @@ def next_tag [datever: string, prefix: string] {
 
 def tag_to_version [tag: string] {
   let parts = ($tag | str replace "v" "" | split row ".")
-  let year = ($parts | get 0 | into int | into string)
-  let month = ($parts | get 1 | into int | into string)
-  let day = ($parts | get 2 | into int | into string)
-  let suffix = ($parts | get 3 | into int | into string)
-  $"($year).($month).($day).($suffix)"
+  let year = ($parts | get 0 | into int)
+  let month = ($parts | get 1 | into int)
+  let day = ($parts | get 2 | into int)
+  let suffix = ($parts | get 3 | into int)
+  
+  let day_of_year = (day_of_year $year $month $day)
+  $"($year).($day_of_year).($suffix)"
+}
+
+def day_of_year [year: int, month: int, day: int] {
+  let days_in_months = [0, 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
+  let is_leap = ((
+    ($year mod 4 == 0) and ($year mod 100 != 0)
+  ) or ($year mod 400 == 0))
+  
+  let days = if $is_leap {
+    [0, 31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
+  } else {
+    $days_in_months
+  }
+  
+  let total = (
+    1..<($month)
+    | reduce -f 0 {|m, acc|
+      $acc + ($days | get $m)
+    }
+  )
+  $total + $day
 }
 
 def update_cargo_version [version: string] {
