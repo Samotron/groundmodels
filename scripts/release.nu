@@ -17,18 +17,36 @@ def main [
 
   let today = (date now | format date "%Y.%m.%d")
   let tag = (next_tag $today $prefix)
+  let version = ($tag | str replace $prefix "")
   let msg = (if ($message | is-empty) { $tag } else { $message })
 
   if $dry_run {
+    print $"Planned version: ($version)"
     print $"Planned tag: ($tag)"
+    print $"Would update Cargo.toml version to ($version)"
+    print $"Would run: git add Cargo.toml Cargo.lock"
+    print $"Would run: git commit -m 'chore: bump version to ($version)'"
     print $"Would run: git tag -a ($tag) -m '($msg)'"
+    print $"Would run: git push origin main"
     print $"Would run: git push origin ($tag)"
     return
   }
 
-  git tag -a $tag -m $msg
-  git push origin $tag
-  print $"Created and pushed tag ($tag)"
+  print $"Updating version to ($version)..."
+  update_cargo_version $version
+
+  print "Committing version bump..."
+  ^git add Cargo.toml Cargo.lock
+  ^git commit -m $"chore: bump version to ($version)"
+
+  print $"Creating tag ($tag)..."
+  ^git tag -a $tag -m $msg
+
+  print "Pushing commit and tag..."
+  ^git push origin main
+  ^git push origin $tag
+
+  print $"Released ($tag)"
 }
 
 def next_tag [datever: string, prefix: string] {
@@ -49,4 +67,11 @@ def next_tag [datever: string, prefix: string] {
   let next = ($max_suffix + 1)
   let padded = ("00" + ($next | into string) | str substring (-2)..)
   $"($base).($padded)"
+}
+
+def update_cargo_version [version: string] {
+  let content = (open -r Cargo.toml)
+  let updated = ($content | str replace -r 'version = ".*"' $"version = \"($version)\"")
+  $updated | save -f Cargo.toml
+  ^cargo build --locked
 }
