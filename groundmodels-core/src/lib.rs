@@ -2,6 +2,11 @@ use serde::{Deserialize, Serialize};
 use std::fs;
 use std::io::Write;
 pub mod agsi;
+pub mod soil_description;
+pub mod strip_log;
+
+#[cfg(test)]
+mod soil_description_tests;
 use crate::agsi::AgsiDataParameterValue;
 
 #[derive(Debug, Clone, Copy, PartialEq)]

@@ -75,6 +75,32 @@ groundmodels table input.json
 groundmodels table input.json --word output.docx
 ```
 
+### Parse Soil Descriptions
+
+```bash
+# Parse a single description
+groundmodels describe --text "Firm brown clay, moist"
+
+# Parse a list of descriptions (one per line)
+groundmodels describe --input descriptions.txt
+```
+
+### Infer Soil Parameters from Description
+
+```bash
+groundmodels params-from-description --text "Medium dense sand"
+```
+
+### Strip Log Exports
+
+```bash
+# Export SVG + CSV strip logs
+groundmodels strip-log -i groundmodel.json --svg striplog.svg --csv striplog.csv
+
+# Include stresses and AGS GEOL export
+groundmodels strip-log -i groundmodel.json --include-stresses --ags-geol geol.csv --hole-id BH101
+```
+
 ### Language Server
 
 ```bash
@@ -144,6 +170,7 @@ result = gm.convert_agsi_to_json(agsi_json, "soil_params")
 - Groundwater level handling
 - Stress calculations (total, effective, pore water pressure)
 - Excavation modeling
+- Strip log SVG/CSV exports
 
 ### Earth Pressure Calculations
 - Active/passive earth pressure coefficients

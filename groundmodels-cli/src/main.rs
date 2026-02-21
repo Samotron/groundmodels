@@ -1,5 +1,11 @@
 use clap::{Parser, Subcommand};
 use groundmodels_core::{ConvertType, SoilParams, GroundModel, SoilType};
+use groundmodels_core::soil_description::{
+    parse_soil_description, validate_soil_description, generate_description,
+    ValidationOptions as DescValidationOptions, SoilDescription,
+    StrengthParameterType as DescStrengthType,
+};
+use groundmodels_core::strip_log::{BuildStripLogOptions, StripLogRenderOptions};
 use serde_json;
 use std::fs;
 use std::path::PathBuf;
@@ -93,6 +99,66 @@ enum Commands {
         /// Output file path for example data
         #[arg(short, long)]
         output: PathBuf,
+    },
+    /// Parse soil description text into structured fields
+    Describe {
+        /// Input text (single description)
+        #[arg(short, long)]
+        text: Option<String>,
+        /// Input file with one description per line
+        #[arg(short, long)]
+        input: Option<PathBuf>,
+        /// Treat warnings as errors
+        #[arg(long, default_value_t = false)]
+        strict: bool,
+        /// Require strength parameters
+        #[arg(long, default_value_t = false)]
+        require_strength: bool,
+        /// Require primary type
+        #[arg(long, default_value_t = false)]
+        require_primary: bool,
+        /// Disable correlation warnings
+        #[arg(long, default_value_t = false)]
+        no_correlations: bool,
+    },
+    /// Suggest soil parameters from description
+    ParamsFromDescription {
+        /// Input text (single description)
+        #[arg(short, long)]
+        text: Option<String>,
+        /// Input file with one description per line
+        #[arg(short, long)]
+        input: Option<PathBuf>,
+    },
+    /// Export strip log outputs from a GroundModel JSON
+    StripLog {
+        /// Input GroundModel JSON file
+        #[arg(short, long)]
+        input: PathBuf,
+        /// Output SVG path
+        #[arg(long)]
+        svg: Option<PathBuf>,
+        /// Output CSV path
+        #[arg(long)]
+        csv: Option<PathBuf>,
+        /// Output AGS GEOL CSV path
+        #[arg(long)]
+        ags_geol: Option<PathBuf>,
+        /// Hole ID for AGS GEOL CSV
+        #[arg(long, default_value = "BH1")]
+        hole_id: String,
+        /// Include stress calculations
+        #[arg(long, default_value_t = false)]
+        include_stresses: bool,
+        /// Stress integration dz (m)
+        #[arg(long, default_value_t = 0.05)]
+        dz: f64,
+        /// Strip log title
+        #[arg(long)]
+        title: Option<String>,
+        /// Axis unit label (right axis)
+        #[arg(long, default_value = "m")]
+        axis_unit: String,
     },
 }
 
@@ -227,9 +293,205 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             fs::write(&output, example_json)?;
             println!("Example AGSi data written to: {}", output.display());
         }
+        Commands::Describe {
+            text,
+            input,
+            strict,
+            require_strength,
+            require_primary,
+            no_correlations,
+        } => {
+            let descriptions = collect_descriptions(text.as_deref(), input.as_ref())?;
+            let opts = DescValidationOptions {
+                strict,
+                require_strength_params: require_strength,
+                require_primary_type: require_primary,
+                check_correlations: !no_correlations,
+            };
+
+            #[derive(serde::Serialize)]
+            struct DescriptionOutput {
+                input: String,
+                description: SoilDescription,
+                validation: groundmodels_core::soil_description::ValidationResult,
+                generated: String,
+            }
+
+            let mut outputs = Vec::new();
+            for desc in descriptions {
+                let parsed = parse_soil_description(&desc);
+                let validation = validate_soil_description(&parsed, opts);
+                let generated = generate_description(&parsed);
+                outputs.push(DescriptionOutput {
+                    input: desc,
+                    description: parsed,
+                    validation,
+                    generated,
+                });
+            }
+
+            if outputs.len() == 1 {
+                let json = serde_json::to_string_pretty(&outputs[0])?;
+                println!("{}", json);
+            } else {
+                let json = serde_json::to_string_pretty(&outputs)?;
+                println!("{}", json);
+            }
+        }
+        Commands::ParamsFromDescription { text, input } => {
+            let descriptions = collect_descriptions(text.as_deref(), input.as_ref())?;
+
+            #[derive(serde::Serialize)]
+            struct InferredRange {
+                parameter_type: String,
+                lower: f64,
+                upper: f64,
+                typical: f64,
+                units: String,
+            }
+
+            #[derive(serde::Serialize)]
+            struct ParamsOutput {
+                input: String,
+                description: SoilDescription,
+                suggested_params: SoilParams,
+                inferred_ranges: Vec<InferredRange>,
+            }
+
+            let mut outputs = Vec::new();
+            for desc in descriptions {
+                let parsed = parse_soil_description(&desc);
+                let mut params = SoilParams::default();
+                if let Some(soil) = parsed.primary_soil_type {
+                    params.reference = format!("{:?}", soil).to_lowercase();
+                } else if let Some(rock) = parsed.primary_rock_type {
+                    params.reference = format!("{:?}", rock).to_lowercase();
+                } else {
+                    params.reference = "inferred".to_string();
+                }
+
+                if parsed.material_type == Some(groundmodels_core::soil_description::MaterialType::Rock) {
+                    params.behaviour = SoilType::Rock;
+                } else if let Some(soil) = parsed.primary_soil_type {
+                    params.behaviour = if groundmodels_core::soil_description::is_cohesive(soil) {
+                        SoilType::Cohesive
+                    } else {
+                        SoilType::Granular
+                    };
+                }
+
+                let mut ranges = Vec::new();
+                for sp in &parsed.strength_parameters {
+                    let inferred = InferredRange {
+                        parameter_type: format!("{:?}", sp.parameter_type),
+                        lower: sp.value_range.lower_bound,
+                        upper: sp.value_range.upper_bound,
+                        typical: sp.value_range.typical_value,
+                        units: sp.units.clone(),
+                    };
+                    ranges.push(inferred);
+
+                    match sp.parameter_type {
+                        DescStrengthType::UndrainedShear => {
+                            params.cu = Some(sp.value_range.typical_value);
+                        }
+                        DescStrengthType::Ucs => {
+                            params.ucs = Some(sp.value_range.typical_value);
+                            params.behaviour = SoilType::Rock;
+                        }
+                        _ => {}
+                    }
+                }
+
+                outputs.push(ParamsOutput {
+                    input: desc,
+                    description: parsed,
+                    suggested_params: params,
+                    inferred_ranges: ranges,
+                });
+            }
+
+            if outputs.len() == 1 {
+                let json = serde_json::to_string_pretty(&outputs[0])?;
+                println!("{}", json);
+            } else {
+                let json = serde_json::to_string_pretty(&outputs)?;
+                println!("{}", json);
+            }
+        }
+        Commands::StripLog {
+            input,
+            svg,
+            csv,
+            ags_geol,
+            hole_id,
+            include_stresses,
+            dz,
+            title,
+            axis_unit,
+        } => {
+            let input_content = fs::read_to_string(&input)?;
+            let ground_model: GroundModel = serde_json::from_str(&input_content)?;
+
+            let rows = ground_model.to_strip_log(BuildStripLogOptions {
+                include_stresses,
+                stress_dz: dz,
+            });
+
+            if let Some(csv_path) = csv {
+                let content = ground_model.to_strip_log_csv(Some(rows.clone()));
+                fs::write(&csv_path, content)?;
+                println!("CSV written to: {}", csv_path.display());
+            }
+
+            if let Some(ags_path) = ags_geol {
+                let content = ground_model.to_ags_geol_csv(&hole_id, Some(rows.clone()));
+                fs::write(&ags_path, content)?;
+                println!("AGS GEOL CSV written to: {}", ags_path.display());
+            }
+
+            if let Some(svg_path) = svg {
+                let svg_content = ground_model.render_strip_log_svg(StripLogRenderOptions {
+                    title,
+                    axis_unit_label: axis_unit,
+                    ..Default::default()
+                });
+                fs::write(&svg_path, svg_content)?;
+                println!("SVG written to: {}", svg_path.display());
+            }
+        }
     }
 
     Ok(())
+}
+
+fn collect_descriptions(
+    text: Option<&str>,
+    input: Option<&PathBuf>,
+) -> Result<Vec<String>, Box<dyn std::error::Error>> {
+    let mut descriptions = Vec::new();
+
+    if let Some(t) = text {
+        if !t.trim().is_empty() {
+            descriptions.push(t.to_string());
+        }
+    }
+
+    if let Some(path) = input {
+        let content = fs::read_to_string(path)?;
+        for line in content.lines() {
+            let trimmed = line.trim();
+            if !trimmed.is_empty() {
+                descriptions.push(trimmed.to_string());
+            }
+        }
+    }
+
+    if descriptions.is_empty() {
+        return Err("Provide --text or --input with at least one description".into());
+    }
+
+    Ok(descriptions)
 }
 
 async fn start_lsp_server(port: u16) -> Result<(), Box<dyn std::error::Error>> {
