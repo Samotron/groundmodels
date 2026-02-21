@@ -17,7 +17,7 @@ def main [
 
   let today = (date now | format date "%Y.%m.%d")
   let tag = (next_tag $today $prefix)
-  let version = ($tag | str replace $prefix "")
+  let version = (tag_to_version $tag)
   let msg = (if ($message | is-empty) { $tag } else { $message })
 
   if $dry_run {
@@ -67,6 +67,15 @@ def next_tag [datever: string, prefix: string] {
   let next = ($max_suffix + 1)
   let padded = ("00" + ($next | into string) | str substring (-2)..)
   $"($base).($padded)"
+}
+
+def tag_to_version [tag: string] {
+  let parts = ($tag | str replace "v" "" | split row ".")
+  let year = ($parts | get 0 | into int | into string)
+  let month = ($parts | get 1 | into int | into string)
+  let day = ($parts | get 2 | into int | into string)
+  let suffix = ($parts | get 3 | into int | into string)
+  $"($year).($month).($day).($suffix)"
 }
 
 def update_cargo_version [version: string] {
